@@ -185,3 +185,60 @@ dockerized-spark-cluster-set-up/ # Repositorio raíz
 Si desea copiar solo los archivos necesarios para implementar los servicios, debe mantener la siguiente estructura:
 ```
 DIRECTORIO-DE-IMPLANTACIÓN/
+Si desea copiar solo los archivos necesarios para implementar los servicios, debe mantener la siguiente estructura:
+```
+DEPLOYMENT-DIRECTORY/ # Cualquier directorio en el administrador de swarm
+│
+├── docker-compose.yml # Configuración principal de implementación
+│
+├── hadoop-config/ # Debe estar en este subdirectorio
+│ ├── core-site.xml
+│ └── hdfs-site.xml
+│
+├── init-datanode.sh # Debe estar en el mismo directorio que docker-compose.yml
+├── start-hdfs.sh
+└── spark-start.sh
+```
+
+Debe ejecutar el comando `stack deploy` en el mismo directorio que el Archivo `docker-compose.yml`.
+
+Si ha implementado correctamente los servicios, debería poder ver las interfaces web de Hadoop y Spark accediendo a las siguientes URL en su navegador web:
+- Interfaz web de Hadoop: `http://<master-ip>:9870`
+- Interfaz web de Spark: `http://<master-ip>:8080`
+- Jupyter Lab: `http://<master-ip>:8888/lab`
+
+Aquí verá algo similar a esto:
+![Interfaz web de Hadoop](assets/HadoopS-cluster.png)
+![Interfaz web de Spark](assets/SparkH-cluster.png)
+
+## Implementación local (Ignorar si no se usan máquinas virtuales)
+
+Al ejecutar Docker sin conexión, surge un problema crítico: al intentar implementar una pila, Docker Swarm intenta extraer las imágenes necesarias de Docker Hub. En un entorno sin conexión, esto falla porque los registros son inaccesibles, lo que provoca que la implementación se detenga con errores de "imagen no encontrada", incluso si las imágenes existen localmente en los nodos.
+
+Para solucionar esto, debemos configurar un registro local de Docker accesible para todos los nodos del Swarm. Este registro alojará las imágenes necesarias. Siga estos pasos en el nodo administrador:
+
+```bash
+# 1. Implemente el servicio de registro
+docker service create --name registry --publish published=5000,target=5000 registry:2
+
+# Ejemplo para Spark
+docker tag bitnami/spark:3.5.5 <registry-host-ip>:5000/bitnami/spark:3.5.5
+docker push <registry-host-ip>:5000/bitnami/spark:3.5.5
+
+# Ejemplo para Hadoop
+docker tag apache/hadoop:3.4.1 192.168.56.2:5000/apache/hadoop:3.4.1
+docker push 192.168.56.2:5000/apache/hadoop:3.4.1
+
+# Ejemplo para Jupyter
+docker tag jupyter/pyspark-notebook:latest 192.168.56.2:5000/jupyter/pyspark-notebook:latest
+docker push 192.168.56.2:5000/jupyter/pyspark-notebook:latest
+
+```
+Crear el siguiente archivo para habilitar el registro local en cada nodo, incluido el administrador.
+
+```bash
+// ruta de archivo: /etc/docker/daemon.json
+{
+"insecure-registries": ["<registry-host-ip>:5000"]
+}
+```

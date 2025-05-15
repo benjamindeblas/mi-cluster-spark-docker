@@ -184,10 +184,7 @@ dockerized-spark-cluster-set-up/ # Repositorio raíz
 
 Si desea copiar solo los archivos necesarios para implementar los servicios, debe mantener la siguiente estructura:
 ```
-DIRECTORIO-DE-IMPLANTACIÓN/
-Si desea copiar solo los archivos necesarios para implementar los servicios, debe mantener la siguiente estructura:
-```
-DEPLOYMENT-DIRECTORY/ # Cualquier directorio en el administrador de swarm
+DEPLOYMENT-DIRECTORY/ # Cualquier directorio en el gestor de Swarm
 │
 ├── docker-compose.yml # Configuración principal de implementación
 │
@@ -200,7 +197,7 @@ DEPLOYMENT-DIRECTORY/ # Cualquier directorio en el administrador de swarm
 └── spark-start.sh
 ```
 
-Debe ejecutar el comando `stack deploy` en el mismo directorio que el Archivo `docker-compose.yml`.
+Debe ejecutar el comando `stack deploy` en el mismo directorio que el archivo `docker-compose.yml`.
 
 Si ha implementado correctamente los servicios, debería poder ver las interfaces web de Hadoop y Spark accediendo a las siguientes URL en su navegador web:
 - Interfaz web de Hadoop: `http://<master-ip>:9870`

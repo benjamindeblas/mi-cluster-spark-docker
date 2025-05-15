@@ -84,5 +84,104 @@ Deberá navegar al directorio donde se encuentra el repositorio clonado y accede
 
 Para ejecutar el clúster Spark-Hadoop, necesita tener instalado el siguiente software en su sistema:
 - Docker: Puede instalar Docker siguiendo las instrucciones del documento [Instalación de Docker](Docs/commands_breakdown.md#docker-installation).
-- Docker Compose: Necesita tener instalado Docker Compose para implementar los servicios. Consulte la documentación oficial [aquí](https://docs.docker.com/compose/install/) para obtener las instrucciones de instalación si no está incluida en su instalación de Docker.
-- Imágenes necesarias: Necesita las imágenes de Docker necesarias para Hadoop y Spark. Puedes extraer las imágenes ejecutando t
+- Docker Compose: Necesita tener instalado Docker Compose para implementar los servicios. Consulte la documentación oficial [aquí](https://docs.docker.com/compose/install/) para obtener las instrucciones de instalación si no está incluido en su instalación de Docker.
+- Imágenes necesarias: Necesita tener las imágenes de Docker necesarias para Hadoop y Spark. Puede extraer las imágenes ejecutando los siguientes comandos:
+```bash
+docker pull bitnami/spark:3.5.5
+docker pull apache/hadoop:3.4.1
+# No es necesario, pero se recomienda encarecidamente para los nodos maestros
+docker pull jupyter/pyspark-notebook:latest
+```
+
+## Configuración de Docker Swarm
+
+El primer paso es crear un Docker Swarm si aún no lo ha hecho. Puede hacerlo ejecutando el siguiente comando en el nodo maestro (para las pruebas iniciales, puede usar el nodo que desee, ya sea una instalación completa de Linux o una máquina virtual):
+```bash
+docker swarm init --advertise-addr <master-ip>
+```
+
+Copie el token generado tras ejecutar el comando, ya que se utilizará para unir los nodos de trabajo al swarm.
+
+Luego, conecte los nodos de trabajo al enjambre ejecutando el siguiente comando en cada uno:
+```bash
+# En cada nodo de trabajo
+docker swarm join --token <token> <master-ip>:2377
+```
+
+Después de conectar los nodos, verifique que formen parte del enjambre ejecutando `docker node ls` en el nodo maestro. Conserve los ID y nombres de host de los nodos para etiquetarlos posteriormente.
+
+Luego, cree la red superpuesta que utilizarán los servicios con:
+```bash
+docker network create -d overlay --attachable hadoop_spark_net
+```
+
+Etiquete los nodos con la etiqueta `h-role` para identificar los nodos maestro y de trabajo. Esta operación se realiza en el nodo administrador, por lo que puede ejecutar los siguientes comandos para etiquetar los nodos:
+```bash
+# Para el nodo maestro
+docker node update --label-add spark-role=master <master-node-id>
+# Para los nodos de trabajo
+docker node update --label-add h-role=worker <worker-node-id>
+docker node update --label-add spark-role=worker <worker-node-id>
+```
+Puede reemplazar `<master-node-id>` y `<worker-node-id>` con el ID del nodo o el nombre de host de los nodos si no hay nombres de host duplicados en el clúster.
+
+En cada nodo, debe crear los siguientes directorios para almacenar los datos HDFS:
+```bash
+sudo mkdir -p /data/hadoop
+sudo chmod 777 /data/hadoop
+```
+
+Después de etiquetar todos los nodos y crear los directorios, puede implementar los servicios mediante Docker Compose:
+```bash
+docker stack deploy -c docker-compose.yml <stack-name>
+```
+
+Puede reemplazar `<stack-name>` con el nombre que desee asignar a la pila. Sin embargo, recomiendo encarecidamente usar nombres cortos, ya que el acceso a los contenedores se realiza mediante el nombre de la pila y el nombre del servicio. Si usa nombres largos, acceder a los contenedores será tedioso.
+
+Compruebe el estado de los servicios ejecutando:
+```bash
+docker service ls
+```
+Si todo funciona correctamente, debería ver los servicios en ejecución y las réplicas de cada uno. Además, si desea ver los registros de un servicio específico, puede ejecutar:
+```bash
+docker service logs <stack-name>_<service-name>
+```
+
+Una vez que todo funcione correctamente, puede acceder a las interfaces web de Hadoop y Spark a través de las siguientes URL en su navegador web:
+- Interfaz web de Hadoop: `http://<master-ip>:9870`
+- Interfaz web de Spark: `http://<master-ip>:8080`
+- Jupyter Lab: `http://<master-ip>:8888/lab`
+
+Siga los pasos del documento [Pasos de ejecución](Docs/Detailed-steps/Execution-steps.md) para realizar una prueba sencilla y comprobar si el clúster de Hadoop funciona correctamente.
+
+Notas importantes
+
+Al implementar los servicios, es importante tener en cuenta la estructura de archivos, ya que los scripts utilizan rutas relativas a los archivos. Por lo tanto, es necesario mantener la estructura básica del repositorio para evitar errores.
+
+La estructura básica del repositorio es la siguiente:
+
+```
+dockerized-spark-cluster-set-up/ # Repositorio raíz
+│
+├── README.md # Documentación principal
+│
+├── Docs/ # Contiene todos los archivos de implementación
+│ │
+│ ├── docker-compose.yml # Configuración principal de implementación
+│ │
+│ ├── hadoop-config/ # Archivos de configuración de Hadoop
+│ │ ├── core-site.xml
+│ │ └── hdfs-site.xml
+│ │
+│ ├── init-datanode.sh # Script de inicialización de DataNode
+│ ├── start-hdfs.sh # Script de inicio de HDFS
+│ ├── spark-start.sh # Script de inicio de Spark
+│ │
+│ └── [Archivos de documentación...] # Varios archivos de documentación de Markdown
+│
+└── [Otros archivos del repositorio...] # .gitignore, etc.
+```
+
+Si desea copiar solo los archivos necesarios para implementar los servicios, debe mantener la siguiente estructura:
+```
+DIRECTORIO-DE-IMPLANTACIÓN/
